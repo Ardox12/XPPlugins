@@ -7,6 +7,7 @@
  *
  * Copyright 2019 Torben Könke.
  */
+#include <stdlib.h>
 #include "util.h"
 
 static char ini_path[MAX_PATH];
