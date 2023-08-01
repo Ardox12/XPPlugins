@@ -7,6 +7,7 @@
  *
  * Copyright 2019 Torben Könke.
  */
+
 #include "plugin.h"
 
 #define PLUGIN_NAME         "BetterMouseYoke"
@@ -18,6 +19,7 @@
 
 #define RUDDER_DEFL_DIST    200
 #define RUDDER_RET_SPEED    2.0f
+#define DEAD_ZONE           0.15f
 
 static XPLMCommandRef toggle_yoke_control;
 static XPLMDataRef yoke_pitch_ratio;
@@ -39,6 +41,7 @@ static int rudder_return;
 static int rudder_defl_dist;
 static float yaw_ratio;
 static float rudder_ret_spd;
+static float dead_zone;
 #ifdef IBM
 static HWND xp_hwnd;
 static HCURSOR yoke_cursor;
@@ -102,6 +105,8 @@ PLUGIN_API int XPluginStart(char *name, char *sig, char *desc) {
     }
     rudder_defl_dist = ini_geti("rudder_deflection_distance", RUDDER_DEFL_DIST);
     rudder_ret_spd = ini_getf("rudder_return_speed", RUDDER_RET_SPEED);
+    dead_zone = ini_getf("dead_zone", DEAD_ZONE);
+    
 #ifdef IBM
     xp_hwnd = FindWindowA("X-System", "X-System");
     if (!xp_hwnd) {
@@ -313,16 +318,30 @@ float loop_cb(float last_call, float last_loop, int count, void *ref) {
     int m_x, m_y;
     get_cursor_pos(&m_x, &m_y);
     if (controlling_rudder(&m_x, &m_y)) {
-        int dist = min(max(m_x - cursor_pos[0], -rudder_defl_dist),
-            rudder_defl_dist);
+        int dist = min(max(m_x - cursor_pos[0], -rudder_defl_dist), rudder_defl_dist);
         _last_time = get_time_ms();
         /* Save value so we don't have to continuously query the dr above. */
         yaw_ratio = dist / (float)rudder_defl_dist;
         XPLMSetDataf(yoke_heading_ratio, yaw_ratio);
     } else {
-        float yoke_roll = 2 * (m_x / (float)screen_width) - 1;
-        float yoke_pitch = 1 - 2 * (m_y / (float)screen_height);
-        XPLMSetDataf(yoke_roll_ratio, yoke_roll);
+	int screen_center_x = screen_width / 2;
+	int screen_center_y = screen_height / 2;
+	int short_side = min(screen_width, screen_height);
+	int deadzone_x_min = screen_center_x - short_side * dead_zone / 2;
+	int deadzone_x_max = screen_center_x + short_side * dead_zone / 2;
+	int deadzone_y_min = screen_center_y - short_side * dead_zone / 2;
+	int deadzone_y_max = screen_center_y + short_side * dead_zone / 2;
+	int max_distance = screen_center_x + short_side / 2 - deadzone_x_max;
+	
+	float yoke_roll = 0, yoke_pitch = 0;
+	
+	if (m_x > deadzone_x_max) yoke_roll = min((float)(m_x - deadzone_x_max) / (float)max_distance, 1);
+	if (m_x < deadzone_x_min) yoke_roll = max((float)(m_x - deadzone_x_min) / (float)max_distance, -1);
+	
+	if (m_y > deadzone_y_max) yoke_pitch = max((float)(deadzone_y_max - m_y) / (float)max_distance, -1);
+	if (m_y < deadzone_y_min) yoke_pitch = min((float)(deadzone_y_min - m_y) / (float)max_distance, 1);
+	
+	XPLMSetDataf(yoke_roll_ratio, yoke_roll);
         XPLMSetDataf(yoke_pitch_ratio, yoke_pitch);
         /* If rudder is still deflected, move it gradually back to zero. */
         if (yaw_ratio != 0 && rudder_return) {
@@ -344,8 +363,7 @@ int left_mouse_down() {
     return GetAsyncKeyState(VK_LBUTTON) >> 15;
 #elif APL
     /* Apparently you can use this also outside of the context of an event. */
-    return CGEventSourceButtonState(
-        kCGEventSourceStateCombinedSessionState, kCGMouseButtonLeft);
+    return CGEventSourceButtonState(kCGEventSourceStateCombinedSessionState, kCGMouseButtonLeft);
 #elif LIN
 
 static int mouse_but = 0;
@@ -424,10 +442,28 @@ void get_cursor_pos(int *x, int *y) {
 }
 
 void set_cursor_from_yoke() {
-    set_cursor_pos(
-        0.5 * screen_width  * (XPLMGetDataf(yoke_roll_ratio) + 1),
-        0.5 * screen_height * (1 - XPLMGetDataf(yoke_pitch_ratio))
-    );
+    int screen_center_x = screen_width / 2;
+    int screen_center_y = screen_height / 2;
+    int short_side = min(screen_width, screen_height);
+    int deadzone_x_min = screen_center_x - short_side * dead_zone / 2;
+    int deadzone_x_max = screen_center_x + short_side * dead_zone / 2;
+    int deadzone_y_min = screen_center_y - short_side * dead_zone / 2;
+    int deadzone_y_max = screen_center_y + short_side * dead_zone / 2;
+    int max_distance = screen_center_x + short_side / 2 - deadzone_x_max;
+    
+    float yoke_roll = XPLMGetDataf(yoke_roll_ratio);
+    float yoke_pitch = XPLMGetDataf(yoke_pitch_ratio);
+    
+    int x = 0, y = 0;
+    
+    if (yoke_roll > 0) x = deadzone_x_max + yoke_roll * max_distance;
+		else if (yoke_roll < 0) x = deadzone_x_min + yoke_roll * max_distance;
+			else x = screen_center_x;
+    if (yoke_pitch > 0) y = deadzone_y_min - yoke_pitch * max_distance;
+		else if (yoke_pitch < 0) y = deadzone_y_max - yoke_pitch * max_distance;
+			else y = screen_center_y;
+    
+    set_cursor_pos(x, y);
 }
 
 void set_cursor_pos(int x, int y) {
