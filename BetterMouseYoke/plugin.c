@@ -317,13 +317,7 @@ float loop_cb(float last_call, float last_loop, int count, void *ref) {
     }
     int m_x, m_y;
     get_cursor_pos(&m_x, &m_y);
-    if (controlling_rudder(&m_x, &m_y)) {
-        int dist = min(max(m_x - cursor_pos[0], -rudder_defl_dist), rudder_defl_dist);
-        _last_time = get_time_ms();
-        /* Save value so we don't have to continuously query the dr above. */
-        yaw_ratio = dist / (float)rudder_defl_dist;
-        XPLMSetDataf(yoke_heading_ratio, yaw_ratio);
-    } else {
+    
 	int screen_center_x = screen_width / 2;
 	int screen_center_y = screen_height / 2;
 	int short_side = min(screen_width, screen_height);
@@ -340,18 +334,26 @@ float loop_cb(float last_call, float last_loop, int count, void *ref) {
 	
 	if (m_y > deadzone_y_max) yoke_pitch = max((float)(deadzone_y_max - m_y) / (float)max_distance, -1);
 	if (m_y < deadzone_y_min) yoke_pitch = min((float)(deadzone_y_min - m_y) / (float)max_distance, 1);
-	
-	XPLMSetDataf(yoke_roll_ratio, yoke_roll);
-        XPLMSetDataf(yoke_pitch_ratio, yoke_pitch);
-        /* If rudder is still deflected, move it gradually back to zero. */
-        if (yaw_ratio != 0 && rudder_return) {
-            long long now = get_time_ms();
-            float dt = (now - _last_time) / 1000.0f;
-            _last_time = now;
-            yaw_ratio = yaw_ratio > 0 ? max(0, yaw_ratio - dt * rudder_ret_spd) :
-                min(0, yaw_ratio + dt * rudder_ret_spd);
-            XPLMSetDataf(yoke_heading_ratio, yaw_ratio);
-        }
+    
+    XPLMSetDataf(yoke_pitch_ratio, yoke_pitch);
+    
+    if (controlling_rudder(&m_x, &m_y)) {
+        int dist = min(max(m_x - cursor_pos[0], -rudder_defl_dist), rudder_defl_dist);
+        _last_time = get_time_ms();
+        /* Save value so we don't have to continuously query the dr above. */
+        yaw_ratio = dist / (float)rudder_defl_dist;
+        XPLMSetDataf(yoke_heading_ratio, yaw_ratio);
+    } else {
+		XPLMSetDataf(yoke_roll_ratio, yoke_roll);
+		/* If rudder is still deflected, move it gradually back to zero. */
+		if (yaw_ratio != 0 && rudder_return) {
+			long long now = get_time_ms();
+			float dt = (now - _last_time) / 1000.0f;
+			_last_time = now;
+			yaw_ratio = yaw_ratio > 0 ? max(0, yaw_ratio - dt * rudder_ret_spd) :
+				min(0, yaw_ratio + dt * rudder_ret_spd);
+			XPLMSetDataf(yoke_heading_ratio, yaw_ratio);
+		}
     }
     /* Call us again next frame. */
     return -1.0f;
