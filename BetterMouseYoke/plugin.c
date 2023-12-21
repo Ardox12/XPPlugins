@@ -42,6 +42,7 @@ static int rudder_defl_dist;
 static float yaw_ratio;
 static float rudder_ret_spd;
 static float dead_zone;
+static XPLMWindowID	g_window;
 #ifdef IBM
 static HWND xp_hwnd;
 static HCURSOR yoke_cursor;
@@ -155,6 +156,35 @@ int xi_opcode, event, error;
     arrows = XcursorLibraryLoadCursor(dpy, "sb_h_double_arrow");
 
 #endif
+    
+    
+    // Creating transparent full screen window, which prevents mouse clicking on panel in yoke control mode
+    int screen_left, screen_bottom, screen_right, screen_top;
+	XPLMGetScreenBoundsGlobal(&screen_left, &screen_top, &screen_right, &screen_bottom);
+	
+	XPLMCreateWindow_t window_params = {
+		.left						= screen_left,
+		.bottom						= screen_bottom,
+		.right						= screen_right,
+		.top						= screen_top,
+		.visible					= 0,
+		.layer						= xplm_WindowLayerFloatingWindows,
+		.decorateAsFloatingWindow	= xplm_WindowDecorationSelfDecorated,
+		.drawWindowFunc				= WindowDraw,
+		.handleCursorFunc			= WindowCursorStatusHandler,
+		.handleMouseClickFunc		= WindowLeftClickHandler,
+		.handleRightClickFunc		= WindowRightClickHandler,
+		.handleMouseWheelFunc		= WindowWheelHandler,
+		.handleKeyFunc				= WindowKeyHandler,
+		.refcon						= NULL,
+		.structSize					= sizeof(window_params),
+	};
+	
+	g_window = XPLMCreateWindowEx(&window_params);
+	XPLMSetWindowTitle(g_window, "Transparent window to prevent mouse clicking");
+	XPLMSetWindowPositioningMode(g_window, xplm_WindowFullScreenOnMonitor, -1);	// Position the window as a "free" floating window, which the user can drag around
+    
+    
     return 1;
 }
 
@@ -176,6 +206,11 @@ PLUGIN_API void XPluginStop(void) {
     XFlush(dpy);
     XCloseDisplay(dpy);
 #endif
+	
+	
+	// Destroying transparent full screen window, which prevents mouse clicking on panel in yoke control mode
+	XPLMDestroyWindow(g_window);
+	g_window = NULL;
 }
 
 /**
@@ -256,6 +291,9 @@ int toggle_yoke_control_cb(XPLMCommandRef cmd, XPLMCommandPhase phase, void *ref
             set_cursor_bmp(CURSOR_ARROW);
         yoke_control_enabled = 0;
         rudder_control = 0;
+        
+        // Setting transparent full screen window invisible
+        XPLMSetWindowIsVisible(g_window, 0);
 #ifdef LIN
     deselect_events(dpy, window);
 #endif // LIN
@@ -274,6 +312,9 @@ int toggle_yoke_control_cb(XPLMCommandRef cmd, XPLMCommandPhase phase, void *ref
             set_cursor_bmp(CURSOR_YOKE);
         yoke_control_enabled = 1;
         XPLMScheduleFlightLoop(loop_id, -1.0f, 0);
+        
+        // Setting transparent full screen window visible
+        XPLMSetWindowIsVisible(g_window, 1);
     }
     return 1;
 }
@@ -625,3 +666,35 @@ static void deselect_events(Display *dpy, Window win)
 }
 
 #endif
+
+// Callbacks we will register when we create our window
+
+void WindowDraw(XPLMWindowID in_window_id, void * in_refcon)
+{
+	
+}
+
+int	WindowLeftClickHandler(XPLMWindowID in_window_id, int x, int y, int is_down, void * in_refcon)
+{
+	return 0;
+}
+
+int	WindowRightClickHandler(XPLMWindowID in_window_id, int x, int y, int is_down, void * in_refcon)
+{
+	return 0;
+}
+
+XPLMCursorStatus WindowCursorStatusHandler(XPLMWindowID in_window_id, int x, int y, void * in_refcon)
+{
+	return xplm_CursorDefault;
+}
+
+int WindowWheelHandler(XPLMWindowID in_window_id, int x, int y, int wheel, int clicks, void * in_refcon)
+{
+	return 0;
+}
+
+void WindowKeyHandler(XPLMWindowID in_window_id, char key, XPLMKeyFlags flags, char virtual_key, void * in_refcon, int losing_focus)
+{
+
+}

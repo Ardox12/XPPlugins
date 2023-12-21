@@ -7,6 +7,7 @@
  *
  * Copyright 2019 Torben Könke.
  */
+ 
 #ifndef _PLUGIN_H_
 #define _PLUGIN_H_
 
@@ -17,6 +18,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
+
 #ifdef IBM
 #pragma comment(lib, "detours.lib")
 #include "detours.h"
@@ -34,7 +36,7 @@ typedef enum {
     CURSOR_RUDDER
 } cursor_t;
 
-int init_menu();
+int	init_menu();
 int toggle_yoke_control_cb(XPLMCommandRef cmd, XPLMCommandPhase phase, void *ref);
 int draw_cb(XPLMDrawingPhase phase, int before, void *ref);
 float loop_cb(float last_call, float last_loop, int count, void *ref);
@@ -43,6 +45,12 @@ void set_cursor_from_yoke();
 void set_cursor_pos(int x, int y);
 void set_cursor_bmp(cursor_t cursor);
 int controlling_rudder(int *x, int *y);
+void WindowDraw(XPLMWindowID in_window_id, void * in_refcon);
+int WindowLeftClickHandler(XPLMWindowID in_window_id, int x, int y, int is_down, void * in_refcon);
+int WindowRightClickHandler(XPLMWindowID in_window_id, int x, int y, int is_down, void * in_refcon);
+XPLMCursorStatus WindowCursorStatusHandler(XPLMWindowID in_window_id, int x, int y, void * in_refcon);
+int WindowWheelHandler(XPLMWindowID in_window_id, int x, int y, int wheel, int clicks, void * in_refcon);
+void WindowKeyHandler(XPLMWindowID in_window_id, char key, XPLMKeyFlags flags, char virtual_key, void * in_refcon, int losing_focus);
 
 #ifdef LIN
 static int has_xi2(Display *dpy);
