@@ -7,12 +7,15 @@
  *
  * Copyright 2019 Torben Könke.
  */
+
 #ifndef _UTIL_H_
 #define _UTIL_H_
 
 #define XPLM200
 #define XPLM210
 #define XPLM300
+#define XPLM301
+
 #ifdef _WIN32
 #ifndef _WIN64
 #error Only 64-Bit platforms are supported.
