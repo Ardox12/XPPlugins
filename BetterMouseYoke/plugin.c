@@ -26,6 +26,9 @@ static XPLMDataRef yoke_pitch_ratio;
 static XPLMDataRef yoke_roll_ratio;
 static XPLMDataRef yoke_heading_ratio;
 static XPLMDataRef eq_pfc_yoke;
+static XPLMDataRef eq_pfc_pedals;
+static int eq_pfc_yoke_prev;
+static int eq_pfc_pedals_prev;
 static XPLMFlightLoopID loop_id;
 static int screen_width;
 static int screen_height;
@@ -93,6 +96,11 @@ PLUGIN_API int XPluginStart(char *name, char *sig, char *desc) {
     eq_pfc_yoke = XPLMFindDataRef("sim/joystick/eq_pfc_yoke");
     if (eq_pfc_yoke == NULL) {
         _log("init fail: could not find eq_pfc_yoke dataref");
+        return 0;
+    }
+    eq_pfc_pedals = XPLMFindDataRef("sim/joystick/eq_pfc_pedals");
+    if (eq_pfc_pedals == NULL) {
+        _log("init fail: could not find eq_pfc_pedals dataref");
         return 0;
     }
     XPLMDataRef has_joystick = XPLMFindDataRef("sim/joystick/has_joystick");
@@ -185,6 +193,14 @@ int xi_opcode, event, error;
 	XPLMSetWindowPositioningMode(g_window, xplm_WindowFullScreenOnMonitor, -1);	// Position the window as a "free" floating window, which the user can drag around
     
     
+    // Disabling X-Plane's mouse yoke control square and rudder controlling
+    eq_pfc_yoke_prev	= XPLMGetDatai(eq_pfc_yoke);
+    eq_pfc_pedals_prev	= XPLMGetDatai(eq_pfc_pedals);
+    
+    XPLMSetDatai(eq_pfc_yoke, 1);
+    XPLMSetDatai(eq_pfc_pedals, 1);
+	
+    
     return 1;
 }
 
@@ -211,6 +227,10 @@ PLUGIN_API void XPluginStop(void) {
 	// Destroying transparent full screen window, which prevents mouse clicking on panel in yoke control mode
 	XPLMDestroyWindow(g_window);
 	g_window = NULL;
+
+    // Restoring X-Plane's mouse yoke control square and rudder controlling if it was enabled
+    XPLMSetDatai(eq_pfc_yoke, eq_pfc_yoke_prev);
+    XPLMSetDatai(eq_pfc_pedals, eq_pfc_pedals_prev);
 }
 
 /**
@@ -259,16 +279,7 @@ PLUGIN_API void XPluginDisable(void) {
  * Called when a message is sent to the plugin by X-Plane 11 or another plugin.
  */
 PLUGIN_API void XPluginReceiveMessage(XPLMPluginID from, int msg, void *param) {
-    if (from != XPLM_PLUGIN_XPLANE)
-        return;
-    if (msg == XPLM_MSG_PLANE_LOADED) {
-        int index = (int)param;
-        /* user's plane */
-        if (index == XPLM_USER_AIRCRAFT) {
-            /* This will hide the clickable yoke control box. */
-            XPLMSetDatai(eq_pfc_yoke, 1);
-        }
-    }
+
 }
 
 int init_menu() {
